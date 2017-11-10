@@ -22,7 +22,8 @@ class Fab_Import {
   }
 
   public function enqueue_scripts(){
-    wp_enqueue_script( 'bootstrap-js', plugins_url( 'bootstrap/js/bootstrap.min.js', __FILE__ ), array('jquery'), '4.0.0-alpha.6', true );
+    wp_enqueue_script( 'tether-js', "https://npmcdn.com/tether@1.2.4/dist/js/tether.min.js", array(), '1.2.4', true );
+    wp_enqueue_script( 'bootstrap-js', plugins_url( 'bootstrap/js/bootstrap.min.js', __FILE__ ), array('tether', 'jquery'), '4.0.0-alpha.6', true );
     wp_enqueue_style( 'bootstrap-css', plugins_url( 'bootstrap/css/bootstrap.min.css', __FILE__ ), '4.0.0-alpha.6' );
   }
 

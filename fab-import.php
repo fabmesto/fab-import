@@ -14,6 +14,7 @@ Domain Path: lang
 class Fab_Import {
   public $action_name = 'action';
   public $current_action = 'index';
+  public $table_origin = "db_pages";
 
   public function __construct() {
     add_action( 'admin_menu', array( &$this, 'fab_add_admin_menu' ) );
@@ -93,7 +94,6 @@ class Fab_Import {
 
   public function origin_pages(){
     global $wpdb;
-    $table = "db_pages";
 
     $posts_per_page = 1000;
     $start = 0;
@@ -101,10 +101,10 @@ class Fab_Import {
     $current_page = (isset($_GET['paged'])?$_GET['paged']:1);
     $start = ($current_page-1)*$posts_per_page;
 
-    $sql_count = "SELECT COUNT(*) FROM ".$table." WHERE deleted='0' ORDER BY id DESC";
+    $sql_count = "SELECT COUNT(*) FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id DESC";
     $total_posts = $wpdb->get_var($sql_count);
 
-    $sql = "SELECT * FROM ".$table." WHERE deleted='0' ORDER BY id DESC LIMIT ".$start.", ".$posts_per_page;
+    $sql = "SELECT * FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id DESC LIMIT ".$start.", ".$posts_per_page;
     $rows = $wpdb->get_results($sql);
 
     $total_page = ceil( $total_posts / $posts_per_page); // Calculate Total pages
@@ -160,12 +160,21 @@ class Fab_Import {
       $post_id = $wpdb->get_var( $query );
       echo "<div> -- Già importato ".$post_id."</div>";
     }else{
+      if($row->id_parent>0){
+        $query = $wpdb->prepare(
+          "SELECT * FROM " . $this->table_origin . " WHERE id = %d",
+          $row->id_parent
+        );
+        $wpdb->query( $query );
+      }
+
       $my_post = array(
         'post_title'    => wp_strip_all_tags( $row->title ),
         'post_content'  => $row->html_main,
         'post_type'  => 'post',
         'post_status'   => 'publish',
-        'post_author'   => 1
+        'post_author'   => 1,
+        'post_category' => array(),
       );
 
       // Insert the post into the database

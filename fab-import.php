@@ -18,12 +18,17 @@ class Fab_Import {
   public function __construct() {
     add_action( 'admin_menu', array( &$this, 'fab_add_admin_menu' ) );
     add_action( 'admin_init', array( &$this, 'fab_settings_init' ) );
+    add_action( 'admin_enqueue_scripts', array( &$this,'enqueue_scripts' ) );
+  }
+
+  public function enqueue_scripts(){
+    wp_enqueue_script( 'bootstrap-js', plugins_url( 'bootstrap/js/bootstrap.min.js', __FILE__ ), array('jquery'), '4.0.0-alpha.6', true );
+    wp_enqueue_style( 'bootstrap-css', plugins_url( 'bootstrap/css/bootstrap.min.css', __FILE__ ), '4.0.0-alpha.6' );
   }
 
   public function fab_add_admin_menu(){
     add_options_page( 'fab-import', 'Fab Import', 'manage_options', 'fab-import', array(&$this, 'fab_options_page') );
   }
-
 
   public function fab_settings_init(  ) {
 

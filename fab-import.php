@@ -15,6 +15,8 @@ class Fab_Import {
   public $action_name = 'action';
   public $current_action = 'index';
   public $table_origin = "db_pages";
+  public $urlsOriginFake = array('http://www.dragonballgt.it/', 'https://www.dragonballgt.it/');
+  public $urlOrigin = "https://www.dragonballsuper.it/";
 
   public function __construct() {
     add_action( 'admin_menu', array( &$this, 'fab_add_admin_menu' ) );
@@ -95,7 +97,7 @@ class Fab_Import {
   public function origin_pages(){
     global $wpdb;
 
-    $posts_per_page = 1000;
+    $posts_per_page = 500;
     $start = 0;
 
     $current_page = (isset($_GET['paged'])?$_GET['paged']:1);
@@ -104,7 +106,7 @@ class Fab_Import {
     $sql_count = "SELECT COUNT(*) FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id DESC";
     $total_posts = $wpdb->get_var($sql_count);
 
-    $sql = "SELECT * FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id DESC LIMIT ".$start.", ".$posts_per_page;
+    $sql = "SELECT * FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id_parent ASC, id ASC LIMIT ".$start.", ".$posts_per_page;
     $rows = $wpdb->get_results($sql);
 
     $total_page = ceil( $total_posts / $posts_per_page); // Calculate Total pages
@@ -126,7 +128,7 @@ class Fab_Import {
     }
   }
 
-  public function Generate_Featured_Image( $image_url, $post_id  ){
+  public function generate_featured_image( $image_url, $post_id  ){
     $upload_dir = wp_upload_dir();
     $image_data = file_get_contents($image_url);
     $filename = basename($image_url);
@@ -148,24 +150,67 @@ class Fab_Import {
     $res2= set_post_thumbnail( $post_id, $attach_id );
   }
 
-  public function import_row($row){
-    global $wpdb;
-    $query = $wpdb->prepare(
-      "SELECT ID FROM " . $wpdb->posts . " WHERE post_title = %s",
-      wp_strip_all_tags( $row->title )
-    );
-    $wpdb->query( $query );
-
-    if ( $wpdb->num_rows ) {
-      $post_id = $wpdb->get_var( $query );
-      echo "<div> -- Già importato ".$post_id."</div>";
+  public function import_category($row){
+    $cat = term_exists($row->title, 'category');
+    if($cat!==0 && $cat!==null){
+      $id_cat = $cat['term_id'];
+      echo "<div>Categoria già importata ".$id_cat."</div>";
     }else{
-      if($row->id_parent>0){
-        $query = $wpdb->prepare(
-          "SELECT * FROM " . $this->table_origin . " WHERE id = %d",
-          $row->id_parent
-        );
-        $wpdb->query( $query );
+      $args = array(
+        'cat_name' => $row->title,
+        'category_description'=>$row->html_main,
+        'category_parent' => $this->get_category_parent($row),
+      );
+      $id_cat = wp_insert_category($args);
+      echo "<div>Categoria importata ".$id_cat."</div>";
+    }
+    return $id_cat;
+  }
+
+  public function get_category_parent ($row){
+    global $wpdb;
+    if($row->id_parent>0){
+      $query = $wpdb->prepare(
+        "SELECT * FROM " . $this->table_origin . " WHERE id = %d",
+        $row->id_parent
+      );
+      $parent_row = $wpdb->get_row( $query );
+      $id_cat = $this->import_category($parent_row);
+    }else{
+      $id_cat = 0;
+    }
+    return $id_cat;
+  }
+
+  public function page_is_category ($row){
+    global $wpdb;
+    $sql = "SELECT id FROM ".$this->table_origin." WHERE deleted='0' AND id_parent='".$row->id."' ORDER BY id_parent ASC, id ASC LIMIT 0,1";
+    $row = $wpdb->get_row($sql);
+    if($row==null) return false;
+    return true;
+  }
+
+  public function import_row($row){
+    if($row->title =='') return;
+
+    if($this->page_is_category($row)){
+      $this->import_category($row);
+    }else{
+      $this->import_post($row);
+    }
+  }
+
+  public function import_post($row){
+    global $wpdb;
+
+    $post_id = post_exists($row->title);
+    if($post_id==0){
+
+      $id_cat = $this->get_category_parent($row);
+
+      $row->gallery = $this->get_gallery($row);
+      if($row->gallery){
+        $row->html_main .= '[ngg_images gallery_ids="'.$row->gallery->ngg_gallery_id.'" display_type="photocrati-nextgen_basic_thumbnails"]';
       }
 
       $my_post = array(
@@ -174,37 +219,45 @@ class Fab_Import {
         'post_type'  => 'post',
         'post_status'   => 'publish',
         'post_author'   => 1,
-        'post_category' => array(),
+        'post_category' => array($id_cat),
       );
 
       // Insert the post into the database
       $post_id = wp_insert_post( $my_post );
       if (is_wp_error($post_id)) {
         $errors = $post_id->get_error_messages();
-        echo "NON Importato <br />";
+        echo "<div>ERRORE - NON Importato </div>";
       }else{
-        $this->__update_post_meta($post_id, "old_id", $row->id);
-        $this->__update_post_meta($post_id, "old_id_parent", $row->id_parent);
-
-        $row->img = str_replace('http://www.dragonballgt.it/', '', $row->img);
-        $row->img = str_replace('https://www.dragonballgt.it/', '', $row->img);
-
-        $pos = strpos($row->img, 'files/');
-
-        if($pos===0){
-          $row->img = str_replace('/tn/', '/', $row->img);
-          $row->img="https://www.dragonballsuper.it/".$row->img;
-        }else if($pos==1){
-          $row->img="https://www.dragonballsuper.it/".substr($row->img, $pos);
-        }
-        if($row->img!=''){
-          $this->__update_post_meta($post_id, "old_img", $row->img);
-          //$this->Generate_Featured_Image($row->img, $post_id);
-        }
-        echo "<div>".$row->id." Importato </div>";
+        echo "<div>".$row->id." Importato - Cat(".$id_cat.") ".($row->gallery?'GALLERY':'')."</div>";
+        $this->import_post_meta( $post_id, $row);
       }
+    }else{
+      echo "<div> -- Già importato ".$post_id."</div>";
     }
   }
+
+  public function import_post_meta($post_id, $row){
+    if($row->gallery) $this->__update_post_meta($post_id, "old_gallery", $row->gallery->dir_path);
+    $this->__update_post_meta($post_id, "old_id", $row->id);
+    $this->__update_post_meta($post_id, "old_id_parent", $row->id_parent);
+
+    foreach($this->urlsOriginFake as $url){
+      $row->img = str_replace($url, '', $row->img);
+    }
+    $pos = strpos($row->img, 'files/');
+
+    if($pos===0){
+      $row->img = str_replace('/tn/', '/', $row->img);
+      $row->img=$this->urlOrigin.$row->img;
+    }else if($pos==1){
+      $row->img=$this->urlOrigin.substr($row->img, $pos);
+    }
+    if($row->img!=''){
+      $this->__update_post_meta($post_id, "old_img", $row->img);
+      // $this->generate_featured_image($row->img, $post_id);
+    }
+  }
+
 
   protected function __update_post_meta( $post_id, $field_name, $value = '' ){
     if ( empty( $value ) OR ! $value )
@@ -220,6 +273,76 @@ class Fab_Import {
       update_post_meta( $post_id, $field_name, $value );
     }
   }
+
+  function get_gallery($row){
+    global $wpdb;
+    $sql = "SELECT ig.* FROM db_modules_installation AS mi, db_mod_images_gallery AS ig WHERE id_page='".$row->id."' AND module_name='images_gallery' AND mi.module_id=ig.id";
+    $row = $wpdb->get_row($sql);
+    if($row==null){
+      return false;
+    }else{
+      $wpdb->insert(
+        $wpdb->prefix."ngg_gallery",
+        array(
+          'name'=>sanitize_title($row->name),
+          'slug'=>sanitize_title($row->name),
+          'path'=>"../".$row->dir_path,
+          'title'=>$row->name,
+          'previewpic'=>1,
+          'author'=>1,
+          'extras_post_id'=>0
+        )
+      );
+      $row->ngg_gallery_id = $wpdb->insert_id;
+      return $row;
+    }
+  }
+
+  public function update_all_title(){
+    global $wpdb;
+    $sql = "SELECT post_id FROM db_pages_csv";
+    $rows = $wpdb->get_results($sql);
+    foreach ($row as $key => $row) {
+      $post_id = $this->get_post_by_old_id($row->id);
+      if($post_id>0){
+        $my_post = array(
+          'ID'           => $post_id,
+          'post_title'   => $row->title,
+        );
+        wp_update_post( $my_post );
+        echo "Update: ".$row->title;
+      }
+    }
+  }
+
+  public function get_post_by_old_id($old_id){
+    global $wpdb;
+    $sql = "SELECT post_id FROM ".$wpdb->postmeta." meta_key='old_id' AND meta_value='".$old_id."' ";
+    $row = $wpdb->get_row($sql);
+    if($row){
+      return $row->post_id;
+    }
+    return 0;
+  }
+
+  /* RESET DB
+  TRUNCATE TABLE `wpner_posts`;
+  TRUNCATE TABLE `wpner_postmeta`;
+  TRUNCATE TABLE `wpner_termmeta`;
+  TRUNCATE TABLE `wpner_terms`;
+  TRUNCATE TABLE `wpner_term_relationships`;
+  TRUNCATE TABLE `wpner_term_taxonomy`;
+  TRUNCATE TABLE `wpner_ngg_gallery`
+
+  TRUNCATE TABLE `wpdb_posts`;
+  TRUNCATE TABLE `wpdb_postmeta`;
+  TRUNCATE TABLE `wpdb_termmeta`;
+  TRUNCATE TABLE `wpdb_terms`;
+  TRUNCATE TABLE `wpdb_term_relationships`;
+  TRUNCATE TABLE `wpdb_term_taxonomy`;
+  TRUNCATE TABLE `wpdb_ngg_gallery`;
+  TRUNCATE TABLE `wpdb_ngg_pictures`;
+  */
 
 }
 

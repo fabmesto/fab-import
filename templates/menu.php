@@ -8,6 +8,9 @@
       <li class="nav-item <?php echo ($this->current_action=='index'?'active':'')?>">
         <a class="nav-link" href="<?php echo add_query_arg( array( $this->action_name=> 'index') ); ?>">Index</a>
       </li>
+      <li class="nav-item <?php echo ($this->current_action=='update_title'?'active':'')?>">
+        <a class="nav-link" href="<?php echo add_query_arg( array( $this->action_name=> 'update_title') ); ?>">Aggiorna titoli</a>
+      </li>
       <li class="nav-item <?php echo ($this->current_action=='settings'?'active':'')?>">
         <a class="nav-link" href="<?php echo add_query_arg( array( $this->action_name=> 'settings') ); ?>">Impostazioni</a>
       </li>

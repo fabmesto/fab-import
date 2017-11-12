@@ -106,7 +106,11 @@ class Fab_Import {
     $sql_count = "SELECT COUNT(*) FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id DESC";
     $total_posts = $wpdb->get_var($sql_count);
 
-    $sql = "SELECT * FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id_parent ASC, id ASC LIMIT ".$start.", ".$posts_per_page;
+    $sql = "SELECT
+    origin.id, csv.title, origin.html_main, origin.img, origin.id_parent, origin.date_creation
+    FROM ".$this->table_origin." AS origin, db_pages_csv AS csv
+    WHERE origin.id=csv.id AND origin.deleted='0' ORDER BY origin.id_parent ASC, origin.id ASC LIMIT ".$start.", ".$posts_per_page;
+    //echo $sql;
     $rows = $wpdb->get_results($sql);
 
     $total_page = ceil( $total_posts / $posts_per_page); // Calculate Total pages
@@ -128,26 +132,84 @@ class Fab_Import {
     }
   }
 
+  public function generate_featured_images(){
+    global $wpdb;
+
+    $posts_per_page = 50;
+    $start = 0;
+
+    $current_page = (isset($_GET['paged'])?$_GET['paged']:1);
+    $start = ($current_page-1)*$posts_per_page;
+
+    $sql_count = "SELECT COUNT(*) FROM ".$wpdb->postmeta." WHERE meta_key='old_img'";
+    $total_posts = $wpdb->get_var($sql_count);
+
+    $sql = "SELECT post_id, meta_value FROM ".$wpdb->postmeta." WHERE meta_key='old_img' LIMIT ".$start.", ".$posts_per_page;
+    $rows = $wpdb->get_results($sql);
+
+    $total_page = ceil( $total_posts / $posts_per_page); // Calculate Total pages
+    $args = array(
+      'format'             => '?paged=%#%',
+      'total'              => $total_page,
+      'current'            =>  $current_page,
+    );
+    echo "<div>".paginate_links( $args )."</div>";
+
+
+    foreach($rows as $row){
+      $image_url = $row->meta_value;
+      $post_id = $row->post_id;
+      echo "<div>".$row->post_id." - ".$row->meta_value."</div>";
+      $this->generate_featured_image( $image_url, $post_id );
+    }
+  }
+
   public function generate_featured_image( $image_url, $post_id  ){
+    // Get an array containing the current upload directory’s path and url.
     $upload_dir = wp_upload_dir();
-    $image_data = file_get_contents($image_url);
+    // image
+    $image_data = @file_get_contents($image_url);
+    if($image_data === FALSE){
+      echo "ERRORE: ".$image_url;
+      return false;
+    }
     $filename = basename($image_url);
+    $filename = str_replace('%20', '-', $filename);
+    $filename = sanitize_file_name($filename);
     if(wp_mkdir_p($upload_dir['path']))     $file = $upload_dir['path'] . '/' . $filename;
     else                                    $file = $upload_dir['basedir'] . '/' . $filename;
-    file_put_contents($file, $image_data);
+    //echo $file;
+    if(file_exists($file)){
+      // controlla se il file esiste
+      echo $file.": esiste già<br>";
+      $attach_id = $this->get_attach_id_by_filename($file);
+      if($attach_id) $res2= set_post_thumbnail( $post_id, $attach_id );
+    }else{
+      file_put_contents($file, $image_data);
 
-    $wp_filetype = wp_check_filetype($filename, null );
-    $attachment = array(
-      'post_mime_type' => $wp_filetype['type'],
-      'post_title' => sanitize_file_name($filename),
-      'post_content' => '',
-      'post_status' => 'inherit'
-    );
-    $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
-    require_once(ABSPATH . 'wp-admin/includes/image.php');
-    $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
-    $res1= wp_update_attachment_metadata( $attach_id, $attach_data );
-    $res2= set_post_thumbnail( $post_id, $attach_id );
+      $wp_filetype = wp_check_filetype($filename, null );
+      $attachment = array(
+        'guid'           => $upload_dir['url'] . '/' . basename( $filename ),
+        'post_mime_type' => $wp_filetype['type'],
+        'post_title' => sanitize_file_name($filename),
+        'post_content' => '',
+        'post_status' => 'inherit'
+      );
+      $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
+      require_once(ABSPATH . 'wp-admin/includes/image.php');
+      $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
+      $res1= wp_update_attachment_metadata( $attach_id, $attach_data );
+      $res2= set_post_thumbnail( $post_id, $attach_id );
+    }
+  }
+
+  public function get_attach_id_by_filename($filename){
+    global $wpdb;
+    $upload_dir = wp_upload_dir();
+    $image_src = $upload_dir['url'] . '/' .basename( $filename );
+    $query = "SELECT id FROM ".$wpdb->posts." WHERE guid='".$image_src."'";
+    $id = $wpdb->get_var($query);
+    return $id;
   }
 
   public function import_category($row){
@@ -171,7 +233,10 @@ class Fab_Import {
     global $wpdb;
     if($row->id_parent>0){
       $query = $wpdb->prepare(
-        "SELECT * FROM " . $this->table_origin . " WHERE id = %d",
+        "SELECT
+        origin.id, csv.title, origin.html_main, origin.img, origin.id_parent, origin.date_creation
+        FROM ".$this->table_origin." AS origin, db_pages_csv AS csv
+        WHERE origin.id=csv.id AND origin.deleted='0' AND origin.id = %d",
         $row->id_parent
       );
       $parent_row = $wpdb->get_row( $query );
@@ -216,9 +281,10 @@ class Fab_Import {
       $my_post = array(
         'post_title'    => wp_strip_all_tags( $row->title ),
         'post_content'  => $row->html_main,
-        'post_type'  => 'post',
+        'post_type'     => 'post',
         'post_status'   => 'publish',
         'post_author'   => 1,
+        'post_date'     => $row->date_creation,
         'post_category' => array($id_cat),
       );
 
@@ -286,7 +352,7 @@ class Fab_Import {
         array(
           'name'=>sanitize_title($row->name),
           'slug'=>sanitize_title($row->name),
-          'path'=>"../".$row->dir_path,
+          'path'=>$row->dir_path,
           'title'=>$row->name,
           'previewpic'=>1,
           'author'=>1,
@@ -300,9 +366,9 @@ class Fab_Import {
 
   public function update_all_title(){
     global $wpdb;
-    $sql = "SELECT post_id FROM db_pages_csv";
+    $sql = "SELECT * FROM db_pages_csv";
     $rows = $wpdb->get_results($sql);
-    foreach ($row as $key => $row) {
+    foreach ($rows as $key => $row) {
       $post_id = $this->get_post_by_old_id($row->id);
       if($post_id>0){
         $my_post = array(
@@ -310,14 +376,17 @@ class Fab_Import {
           'post_title'   => $row->title,
         );
         wp_update_post( $my_post );
-        echo "Update: ".$row->title;
+        echo "<div>Update: ".$row->title."</div>";
+      }else{
+        echo "<div>Non trovato: ".$row->title."</div>";
       }
     }
   }
 
   public function get_post_by_old_id($old_id){
     global $wpdb;
-    $sql = "SELECT post_id FROM ".$wpdb->postmeta." meta_key='old_id' AND meta_value='".$old_id."' ";
+    $sql = "SELECT post_id FROM ".$wpdb->postmeta." WHERE meta_key='old_id' AND meta_value='".$old_id."' ";
+    //echo $sql."<br>";
     $row = $wpdb->get_row($sql);
     if($row){
       return $row->post_id;

@@ -396,15 +396,23 @@ class Fab_Import {
 
   public function generate_galleries(){
     global $wpdb;
-    $sql = "SELECT gid, path FROM $wpdb->nggallery";
+    $sql = "SELECT * FROM $wpdb->nggallery ORDER by gid DESC LIMIT 0, 5";
     $rows = $wpdb->get_results($sql);
     foreach ($rows as $key => $row) {
-      echo "<div>".$row->gid." - ".$row->path."</div>";
+
+      $sql = "SELECT count(*) FROM $wpdb->nggpictures WHERE galleryid='".$row->gid."'";
+      $count = $wpdb->get_var($sql);
+      //echo "<pre>".print_r($row)."</pre>";
+      echo "<div>".$row->gid." - ".$count." - ".$row->path."</div>";
+      if($count==0){
+        $this->import_nggallery($row->gid, $row->path);
+      }
     }
   }
 
   public function import_nggallery($gid, $gallerypath){
-    global $wpdb;
+    $dir = plugin_dir_path( __FILE__ );
+    require_once($dir."../nextgen-gallery/products/photocrati_nextgen/modules/ngglegacy/admin/functions.php");
     nggAdmin::import_gallery($gallerypath, $gid);
   }
 
@@ -425,6 +433,16 @@ class Fab_Import {
   TRUNCATE TABLE `wpdb_term_taxonomy`;
   TRUNCATE TABLE `wpdb_ngg_gallery`;
   TRUNCATE TABLE `wpdb_ngg_pictures`;
+
+
+  TRUNCATE TABLE `wp_posts`;
+  TRUNCATE TABLE `wp_postmeta`;
+  TRUNCATE TABLE `wp_termmeta`;
+  TRUNCATE TABLE `wp_terms`;
+  TRUNCATE TABLE `wp_term_relationships`;
+  TRUNCATE TABLE `wp_term_taxonomy`;
+  TRUNCATE TABLE `wp_ngg_gallery`;
+  TRUNCATE TABLE `wp_ngg_pictures`;
   */
 
 }

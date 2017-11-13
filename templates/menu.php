@@ -14,6 +14,9 @@
       <li class="nav-item <?php echo ($this->current_action=='generate_images'?'active':'')?>">
         <a class="nav-link" href="<?php echo add_query_arg( array( $this->action_name=> 'generate_images') ); ?>">Generate images</a>
       </li>
+      <li class="nav-item <?php echo ($this->current_action=='generate_gallery'?'active':'')?>">
+        <a class="nav-link" href="<?php echo add_query_arg( array( $this->action_name=> 'generate_gallery') ); ?>">Generate gallery</a>
+      </li>
       <li class="nav-item <?php echo ($this->current_action=='settings'?'active':'')?>">
         <a class="nav-link" href="<?php echo add_query_arg( array( $this->action_name=> 'settings') ); ?>">Impostazioni</a>
       </li>

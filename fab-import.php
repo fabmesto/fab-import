@@ -14,7 +14,7 @@ Domain Path: lang
 class Fab_Import {
   public $action_name = 'action';
   public $current_action = 'index';
-  public $table_origin = "db_pages";
+  public $prefix_table_origin = "db_";
   public $urlsOriginFake = array('http://www.dragonballgt.it/', 'https://www.dragonballgt.it/');
   public $urlOrigin = "https://www.dragonballsuper.it/";
 
@@ -103,12 +103,12 @@ class Fab_Import {
     $current_page = (isset($_GET['paged'])?$_GET['paged']:1);
     $start = ($current_page-1)*$posts_per_page;
 
-    $sql_count = "SELECT COUNT(*) FROM ".$this->table_origin." WHERE deleted='0' ORDER BY id DESC";
+    $sql_count = "SELECT COUNT(*) FROM ".$this->prefix_table_origin."pages WHERE deleted='0' ORDER BY id DESC";
     $total_posts = $wpdb->get_var($sql_count);
 
     $sql = "SELECT
     origin.id, csv.title, origin.html_main, origin.img, origin.id_parent, origin.date_creation
-    FROM ".$this->table_origin." AS origin, db_pages_csv AS csv
+    FROM ".$this->prefix_table_origin."pages AS origin, ".$this->prefix_table_origin."pages_csv AS csv
     WHERE origin.id=csv.id AND origin.deleted='0' ORDER BY origin.id_parent ASC, origin.id ASC LIMIT ".$start.", ".$posts_per_page;
     //echo $sql;
     $rows = $wpdb->get_results($sql);
@@ -235,7 +235,7 @@ class Fab_Import {
       $query = $wpdb->prepare(
         "SELECT
         origin.id, csv.title, origin.html_main, origin.img, origin.id_parent, origin.date_creation
-        FROM ".$this->table_origin." AS origin, db_pages_csv AS csv
+        FROM ".$this->prefix_table_origin."pages AS origin, ".$this->prefix_table_origin."pages_csv AS csv
         WHERE origin.id=csv.id AND origin.deleted='0' AND origin.id = %d",
         $row->id_parent
       );
@@ -249,7 +249,7 @@ class Fab_Import {
 
   public function page_is_category ($row){
     global $wpdb;
-    $sql = "SELECT id FROM ".$this->table_origin." WHERE deleted='0' AND id_parent='".$row->id."' ORDER BY id_parent ASC, id ASC LIMIT 0,1";
+    $sql = "SELECT id FROM ".$this->prefix_table_origin."pages WHERE deleted='0' AND id_parent='".$row->id."' ORDER BY id_parent ASC, id ASC LIMIT 0,1";
     $row = $wpdb->get_row($sql);
     if($row==null) return false;
     return true;
@@ -342,7 +342,7 @@ class Fab_Import {
 
   function get_gallery($row){
     global $wpdb;
-    $sql = "SELECT ig.* FROM db_modules_installation AS mi, db_mod_images_gallery AS ig WHERE id_page='".$row->id."' AND module_name='images_gallery' AND mi.module_id=ig.id";
+    $sql = "SELECT ig.* FROM ".$this->prefix_table_origin."modules_installation AS mi, ".$this->prefix_table_origin."mod_images_gallery AS ig WHERE id_page='".$row->id."' AND module_name='images_gallery' AND mi.module_id=ig.id";
     $row = $wpdb->get_row($sql);
     if($row==null){
       return false;
@@ -366,7 +366,7 @@ class Fab_Import {
 
   public function update_all_title(){
     global $wpdb;
-    $sql = "SELECT * FROM db_pages_csv";
+    $sql = "SELECT * FROM ".$this->prefix_table_origin."pages_csv";
     $rows = $wpdb->get_results($sql);
     foreach ($rows as $key => $row) {
       $post_id = $this->get_post_by_old_id($row->id);
@@ -394,11 +394,18 @@ class Fab_Import {
     return 0;
   }
 
-  public function import_nggallery($gid){
+  public function generate_galleries(){
     global $wpdb;
-    $this->gid = $gid;
-    $gallerypath = $wpdb->get_var("SELECT path FROM $wpdb->nggallery WHERE gid = '$this->gid' ");
-    nggAdmin::import_gallery($gallerypath, $this->gid);
+    $sql = "SELECT gid, path FROM $wpdb->nggallery";
+    $rows = $wpdb->get_results($sql);
+    foreach ($rows as $key => $row) {
+      echo "<div>".$row->gid." - ".$row->path."</div>";
+    }
+  }
+
+  public function import_nggallery($gid, $gallerypath){
+    global $wpdb;
+    nggAdmin::import_gallery($gallerypath, $gid);
   }
 
   /* RESET DB

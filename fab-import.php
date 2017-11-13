@@ -394,6 +394,13 @@ class Fab_Import {
     return 0;
   }
 
+  public function import_nggallery($gid){
+    global $wpdb;
+    $this->gid = $gid;
+    $gallerypath = $wpdb->get_var("SELECT path FROM $wpdb->nggallery WHERE gid = '$this->gid' ");
+    nggAdmin::import_gallery($gallerypath, $this->gid);
+  }
+
   /* RESET DB
   TRUNCATE TABLE `wpner_posts`;
   TRUNCATE TABLE `wpner_postmeta`;

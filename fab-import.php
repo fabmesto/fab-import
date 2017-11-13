@@ -396,8 +396,27 @@ class Fab_Import {
 
   public function generate_galleries(){
     global $wpdb;
-    $sql = "SELECT * FROM $wpdb->nggallery ORDER by gid DESC LIMIT 0, 5";
+
+    $posts_per_page = 50;
+    $start = 0;
+
+    $current_page = (isset($_GET['paged'])?$_GET['paged']:1);
+    $start = ($current_page-1)*$posts_per_page;
+
+    $sql_count = "SELECT count(*) FROM $wpdb->nggallery ORDER by gid";
+    $total_posts = $wpdb->get_var($sql_count);
+
+    $sql = "SELECT * FROM $wpdb->nggallery ORDER by gid DESC LIMIT ".$start.", ".$posts_per_page;
     $rows = $wpdb->get_results($sql);
+
+    $total_page = ceil( $total_posts / $posts_per_page); // Calculate Total pages
+    $args = array(
+      'format'             => '?paged=%#%',
+      'total'              => $total_page,
+      'current'            =>  $current_page,
+    );
+    echo "<div>".paginate_links( $args )."</div>";
+
     foreach ($rows as $key => $row) {
 
       $sql = "SELECT count(*) FROM $wpdb->nggpictures WHERE galleryid='".$row->gid."'";
@@ -414,6 +433,96 @@ class Fab_Import {
     $dir = plugin_dir_path( __FILE__ );
     require_once($dir."../nextgen-gallery/products/photocrati_nextgen/modules/ngglegacy/admin/functions.php");
     nggAdmin::import_gallery($gallerypath, $gid);
+  }
+
+  public function change_author(){
+    $old_ids = array(
+      array('id'=>'1468'),
+      array('id'=>'1462'),
+      array('id'=>'1463'),
+      array('id'=>'1464'),
+      array('id'=>'680'),
+      array('id'=>'1440'),
+      array('id'=>'1467'),
+      array('id'=>'1466'),
+      array('id'=>'1465'),
+      array('id'=>'1393'),
+      array('id'=>'1394'),
+      array('id'=>'1396'),
+      array('id'=>'1397'),
+      array('id'=>'1401'),
+      array('id'=>'1404'),
+      array('id'=>'1408'),
+      array('id'=>'1409'),
+      array('id'=>'1410'),
+      array('id'=>'1411'),
+      array('id'=>'1412'),
+      array('id'=>'1417'),
+      array('id'=>'1418'),
+      array('id'=>'1419'),
+      array('id'=>'1420'),
+      array('id'=>'1421'),
+      array('id'=>'1422'),
+      array('id'=>'1423'),
+      array('id'=>'1424'),
+      array('id'=>'1425'),
+      array('id'=>'1427'),
+      array('id'=>'1428'),
+      array('id'=>'1431'),
+      array('id'=>'1432'),
+      array('id'=>'1433'),
+      array('id'=>'1434'),
+      array('id'=>'1435'),
+      array('id'=>'1436'),
+      array('id'=>'1437'),
+      array('id'=>'1438'),
+      array('id'=>'1439'),
+      array('id'=>'1441'),
+      array('id'=>'1442'),
+      array('id'=>'1444'),
+      array('id'=>'1445'),
+      array('id'=>'1472'),
+      array('id'=>'1471'),
+      array('id'=>'1446'),
+      array('id'=>'1470'),
+      array('id'=>'1447'),
+      array('id'=>'1448'),
+      array('id'=>'1449'),
+      array('id'=>'1450'),
+      array('id'=>'1469'),
+      array('id'=>'1451'),
+      array('id'=>'1453'),
+      array('id'=>'1454'),
+      array('id'=>'1455'),
+      array('id'=>'1456'),
+      array('id'=>'1457'),
+      array('id'=>'1458'),
+      array('id'=>'1459'),
+      array('id'=>'1460'),
+      array('id'=>'1473'),
+      array('id'=>'1474'),
+      array('id'=>'1481'),
+      array('id'=>'1476'),
+      array('id'=>'1477'),
+      array('id'=>'1478'),
+      array('id'=>'1479'),
+      array('id'=>'1480')
+    );
+
+    foreach ($old_ids as $key => $row) {
+      $post_id = $this->get_post_by_old_id($row['id']);
+      if($post_id>0){
+        $my_post = array(
+          'ID'      => $post_id,
+          'post_author'  => 3,
+        );
+        wp_update_post( $my_post );
+        echo "<div>Update: ".$post_id."</div>";
+      }else{
+        echo "<div>Non trovato: ".$post_id."</div>";
+      }
+    }
+
   }
 
   /* RESET DB

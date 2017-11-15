@@ -144,7 +144,7 @@ class Fab_Import {
     $sql_count = "SELECT COUNT(*) FROM ".$wpdb->postmeta." WHERE meta_key='old_img'";
     $total_posts = $wpdb->get_var($sql_count);
 
-    $sql = "SELECT post_id, meta_value FROM ".$wpdb->postmeta." WHERE meta_key='old_img' LIMIT ".$start.", ".$posts_per_page;
+    $sql = "SELECT post_id, meta_value, post_title FROM ".$wpdb->postmeta." AS postmeta, ".$wpdb->posts." AS posts WHERE posts.ID=postmeta.post_id AND meta_key='old_img' LIMIT ".$start.", ".$posts_per_page;
     $rows = $wpdb->get_results($sql);
 
     $total_page = ceil( $total_posts / $posts_per_page); // Calculate Total pages
@@ -159,12 +159,12 @@ class Fab_Import {
     foreach($rows as $row){
       $image_url = $row->meta_value;
       $post_id = $row->post_id;
-      echo "<div>".$row->post_id." - ".$row->meta_value."</div>";
-      $this->generate_featured_image( $image_url, $post_id );
+      echo "<div>".$row->post_id." - ".$row->meta_value." - ".$row->post_title."</div>";
+      $this->generate_featured_image( $image_url, $post_id, $row->post_title );
     }
   }
 
-  public function generate_featured_image( $image_url, $post_id  ){
+  public function generate_featured_image( $image_url, $post_id, $post_title  ){
     // Get an array containing the current upload directory’s path and url.
     $upload_dir = wp_upload_dir();
     // image
@@ -173,9 +173,9 @@ class Fab_Import {
       echo "ERRORE: ".$image_url;
       return false;
     }
-    $filename = basename($image_url);
-    $filename = str_replace('%20', '-', $filename);
-    $filename = sanitize_file_name($filename);
+    $ext = pathinfo($image_url, PATHINFO_EXTENSION);
+    $post_title = sanitize_title($post_title);
+    $filename = sanitize_file_name($post_title.'.'.$ext);
     if(wp_mkdir_p($upload_dir['path']))     $file = $upload_dir['path'] . '/' . $filename;
     else                                    $file = $upload_dir['basedir'] . '/' . $filename;
     //echo $file;
@@ -320,7 +320,6 @@ class Fab_Import {
     }
     if($row->img!=''){
       $this->__update_post_meta($post_id, "old_img", $row->img);
-      // $this->generate_featured_image($row->img, $post_id);
     }
   }
 
@@ -523,6 +522,19 @@ class Fab_Import {
       }
     }
 
+  }
+
+  public function reset_library (){
+    global $wpdb;
+    $sql = "SELECT pm.meta_id FROM ".$wpdb->posts." as p, ".$wpdb->postmeta." as pm WHERE p.ID=pm.post_id and post_type= 'attachment' ORDER BY `ID` DESC";
+    $rows = $wpdb->get_results($sql);
+
+    foreach ($rows as $key => $row) {
+      $wpdb->delete( $wpdb->postmeta, array( 'meta_id' => $row->meta_id) );
+    }
+
+    $wpdb->delete( $wpdb->posts, array( 'post_type' => 'attachment') );
+    echo "RESET!";
   }
 
   /* RESET DB
